@@ -4,6 +4,8 @@ backend/__pycache__/
 backend/*.db
 backend/downloads/
 backend/videos/
+.env
+**/.env
 backend/.env
 
 # 忽略前端依赖和打包文件
