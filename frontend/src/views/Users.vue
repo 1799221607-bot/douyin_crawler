@@ -121,6 +121,7 @@ onMounted(fetchUsers)
 </script>
 
 <style scoped>
+.users-page { width: 100%; }
 .page-header {
   display: flex;
   justify-content: space-between;

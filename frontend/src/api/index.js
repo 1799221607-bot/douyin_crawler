@@ -96,5 +96,5 @@ export const logApi = {
 }
 
 export const statsApi = {
-  get: () => api.get('/stats'),
+  get: () => api.get('/logs/stats'),
 }

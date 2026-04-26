@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 from config import settings
 from database import AsyncSessionLocal
@@ -22,8 +23,18 @@ class CrawlScheduler:
         self.scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
 
     def start(self):
+        # 注册采集任务
         self.scheduler.start()
-        logger.info("[Scheduler] 调度器已启动")
+        
+        # 注册每日凌晨 3:00 的存储清理任务
+        self.scheduler.add_job(
+            func=cleanup_expired_videos_task,
+            trigger=CronTrigger(hour=3, minute=0),
+            id="system_cleanup",
+            replace_existing=True
+        )
+        
+        logger.info("[Scheduler] 调度器已启动，已挂载每日清理任务")
 
     def stop(self):
         self.scheduler.shutdown(wait=False)
@@ -130,21 +141,38 @@ async def crawl_creator_task(creator_id: int):
 
         logger.info(f"[Task] 开始采集: {creator.name}")
         new_count = 0
+        
+        # 初始化基础配置，防止后续异常处理时变量未定义
+        config = {
+            "cookie": settings.cookie,
+            "proxy": settings.proxy if settings.collector_proxy_enabled else None,
+            "download_dir": settings.download_dir,
+            "fast_mode": creator.is_fast_mode,
+            "user_agent": None
+        }
 
         try:
-            # 1. 获取视频列表
-            collector = collector_registry.get("video")
-            db_cookie = await setting_repo.get_value("dy_cookie")
-            cookie = db_cookie if db_cookie else settings.cookie
+            # 1. 尝试从账号池获取账号
+            from collector.account_manager import AccountManager
+            account_mgr = AccountManager(db)
+            pool_cookie, pool_proxy, pool_ua = await account_mgr.get_account_for_task("douyin")
             
-            config = {
-                "cookie": cookie,
-                "proxy": settings.proxy,
-                "download": creator.download_video,
-                "download_dir": settings.download_dir,
-            }
+            if not pool_cookie:
+                raise Exception("账号池中无可用抖音账号，请先在‘账号池’页面添加账号并确保其状态为‘正常’")
+
+            config["cookie"] = pool_cookie
+            if pool_proxy: config["proxy"] = pool_proxy
+            config["user_agent"] = pool_ua
+
             target = {"user_url": creator.user_url, "creator_id": creator.id, "creator_name": creator.name}
+            
+            # 2. 执行采集
+            collector = collector_registry.get("video")
             raw_videos = await collector.collect(target, config)
+
+            # 反馈状态
+            if pool_cookie:
+                await account_mgr.report_status(config["cookie"], "douyin", success=True if raw_videos else False)
 
             if not raw_videos:
                 logger.warning(f"[Task] {creator.name} 未获取到视频数据")
@@ -154,14 +182,14 @@ async def crawl_creator_task(creator_id: int):
                 await db.commit()
                 return
 
-            # 2. 增量去重
+            # 3. 增量去重
             aweme_ids = [v["aweme_id"] for v in raw_videos if v.get("aweme_id")]
             existing_ids = await video_repo.bulk_get_aweme_ids(aweme_ids)
             new_videos = [v for v in raw_videos if v["aweme_id"] not in existing_ids]
 
             logger.info(f"[Task] {creator.name}: 共{len(raw_videos)}条, 新增{len(new_videos)}条")
 
-            # 3. 入库
+            # 4. 入库
             for v in new_videos:
                 published_at = None
                 if v.get("published_at"):
@@ -188,7 +216,7 @@ async def crawl_creator_task(creator_id: int):
 
             await db.commit()
 
-            # 4. 下载视频文件（入库后再下载，避免下载失败丢数据）
+            # 5. 下载视频文件
             if creator.download_video and new_videos:
                 for v in new_videos:
                     if v.get("play_url"):
@@ -239,3 +267,63 @@ async def crawl_creator_task(creator_id: int):
 
 # 全局调度器单例
 crawler_scheduler = CrawlScheduler()
+
+
+# ─── 存储清理任务 ─────────────────────────────────────────────────────────────
+
+async def cleanup_expired_videos_task():
+    """
+    清理过期视频：
+    1. 读取设置中的保留天数
+    2. 计算截止时间
+    3. 删除物理文件并从数据库移除记录
+    """
+    import os
+    from datetime import datetime, timedelta
+    from sqlalchemy import select, delete
+    from db.models import Video
+    
+    logger.info("[Cleanup] 开始执行存储清理任务...")
+    
+    async with AsyncSessionLocal() as db:
+        setting_repo = SystemSettingRepo(db)
+        retention_days_str = await setting_repo.get_value("video_retention_days")
+        retention_days = int(retention_days_str) if retention_days_str else 0
+        
+        if retention_days <= 0:
+            logger.info("[Cleanup] 自动清理已禁用 (保留天数=0)")
+            return
+            
+        deadline = datetime.now() - timedelta(days=retention_days)
+        
+        # 1. 查找过期视频
+        result = await db.execute(
+            select(Video).where(Video.created_at < deadline)
+        )
+        expired_videos = result.scalars().all()
+        
+        if not expired_videos:
+            logger.info(f"[Cleanup] 未发现 {retention_days} 天前的过期视频")
+            return
+            
+        logger.info(f"[Cleanup] 发现 {len(expired_videos)} 条过期视频记录，准备清理...")
+        
+        count = 0
+        for video in expired_videos:
+            # 物理删除文件
+            if video.local_path and os.path.exists(video.local_path):
+                try:
+                    os.remove(video.local_path)
+                    # 同时尝试删除封面图（如果有）
+                    cover_path = video.local_path.replace(".mp4", ".jpg")
+                    if os.path.exists(cover_path):
+                        os.remove(cover_path)
+                except Exception as e:
+                    logger.error(f"[Cleanup] 物理删除失败 {video.aweme_id}: {e}")
+            
+            # 从数据库移除
+            await db.delete(video)
+            count += 1
+            
+        await db.commit()
+        logger.info(f"[Cleanup] 清理完成，共移除 {count} 条历史视频")

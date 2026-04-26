@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import select, update, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from db.models import Creator, Video, AISummary, NotificationConfig, CrawlLog, User, LoginLog
+from db.models import Creator, Video, AISummary, NotificationConfig, CrawlLog, User, LoginLog, PlatformAccount
 
 
 # ─── Creator ───────────────────────────────────────────────────────────────
@@ -130,6 +130,31 @@ class VideoRepo:
             .options(selectinload(Video.ai_summary), selectinload(Video.creator))
         )
         return result.scalar_one_or_none()
+
+    async def list_with_filters(
+        self, filters: list, page: int = 1, page_size: int = 20
+    ) -> tuple[list[Video], int]:
+        """通用的多条件过滤查询"""
+        q = select(Video)
+        count_q = select(func.count()).select_from(Video)
+        
+        for f in filters:
+            q = q.where(f)
+            count_q = count_q.where(f)
+
+        total = (await self.db.execute(count_q)).scalar()
+        result = await self.db.execute(
+            q.order_by(Video.created_at.desc()) # 按采集时间倒序，确保最新采集的在最前
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .options(selectinload(Video.ai_summary), selectinload(Video.creator))
+        )
+        return result.scalars().all(), total
+
+    async def delete_by_aweme_id(self, aweme_id: str):
+        video = await self.get_by_aweme_id(aweme_id)
+        if video:
+            await self.db.delete(video)
 
 
 # ─── AISummary ─────────────────────────────────────────────────────────────
@@ -310,3 +335,61 @@ class LoginLogRepo:
             select(LoginLog).order_by(LoginLog.created_at.desc()).limit(limit)
         )
         return result.scalars().all()
+
+
+# ─── PlatformAccount ──────────────────────────────────────────────────────
+
+class AccountRepo:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_by_platform(self, platform: str) -> list[PlatformAccount]:
+        result = await self.db.execute(
+            select(PlatformAccount).where(PlatformAccount.platform == platform)
+        )
+        return result.scalars().all()
+
+    async def get_by_id(self, account_id: int) -> Optional[PlatformAccount]:
+        result = await self.db.execute(
+            select(PlatformAccount).where(PlatformAccount.id == account_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_next_available(self, platform: str) -> Optional[PlatformAccount]:
+        """
+        核心调度算法：获取最久未使用的有效账号实现轮询
+        """
+        result = await self.db.execute(
+            select(PlatformAccount)
+            .where(PlatformAccount.platform == platform)
+            .where(PlatformAccount.status == "active")
+            .order_by(PlatformAccount.last_used_at.asc().nulls_first())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def create(self, **kwargs) -> PlatformAccount:
+        account = PlatformAccount(**kwargs)
+        self.db.add(account)
+        await self.db.flush()
+        await self.db.refresh(account)
+        return account
+
+    async def update(self, account_id: int, **kwargs) -> Optional[PlatformAccount]:
+        await self.db.execute(
+            update(PlatformAccount).where(PlatformAccount.id == account_id).values(**kwargs)
+        )
+        return await self.get_by_id(account_id)
+
+    async def update_last_used(self, account_id: int):
+        await self.db.execute(
+            update(PlatformAccount)
+            .where(PlatformAccount.id == account_id)
+            .values(last_used_at=datetime.now())
+        )
+
+    async def delete(self, account_id: int):
+        account = await self.get_by_id(account_id)
+        if account:
+            await self.db.delete(account)
+

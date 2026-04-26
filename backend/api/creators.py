@@ -25,8 +25,15 @@ class CreatorUpdate(BaseModel):
     enabled: Optional[bool] = None
 
 
+from datetime import timedelta
+
 def _to_dict(c) -> dict:
     status = crawler_scheduler.get_job_status(c.id)
+    
+    # 转换为本地时间 (UTC+8)
+    created_at = c.created_at + timedelta(hours=8) if c.created_at else None
+    last_run_at = c.last_run_at + timedelta(hours=8) if c.last_run_at else None
+    
     return {
         "id": c.id,
         "name": c.name,
@@ -37,8 +44,8 @@ def _to_dict(c) -> dict:
         "interval_min": c.interval_min,
         "enabled": c.enabled,
         "download_video": c.download_video,
-        "created_at": c.created_at.isoformat() if c.created_at else None,
-        "last_run_at": c.last_run_at.isoformat() if c.last_run_at else None,
+        "created_at": created_at.isoformat() if created_at else None,
+        "last_run_at": last_run_at.isoformat() if last_run_at else None,
         "next_run_at": status["next_run"] if status else None,
         "job_paused": status["paused"] if status else True,
     }

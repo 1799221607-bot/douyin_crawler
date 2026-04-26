@@ -1,5 +1,5 @@
 from ai.openai_processor import OpenAIProcessor
-from config import settings
+from loguru import logger
 
 class NvidiaProcessor(OpenAIProcessor):
     """
@@ -8,10 +8,8 @@ class NvidiaProcessor(OpenAIProcessor):
     """
     provider = "nvidia"
 
-    def __init__(self):
-        super().__init__()
-
     async def transcribe(self, audio_path: str) -> str:
-        # NVIDIA NIM 目前主要侧重于推理模型
-        # 转录建议使用 OpenAI 或本地 Whisper，或者 NVIDIA 特有的 Riva 服务
+        """NVIDIA NIM 的转录实现"""
+        logger.info(f"[NvidiaProcessor] 正在使用 NVIDIA 接口转录音频...")
+        # 直接复用父类经过代理加固的 client 和 transcribe 逻辑
         return await super().transcribe(audio_path)

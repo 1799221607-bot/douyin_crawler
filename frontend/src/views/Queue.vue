@@ -97,7 +97,7 @@ onMounted(loadQueue)
 </script>
 
 <style scoped>
-.queue-page { max-width: 1200px; }
+.queue-page { width: 100%; }
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }

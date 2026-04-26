@@ -73,7 +73,7 @@ onMounted(loadLogs)
 </script>
 
 <style scoped>
-.logs-page { max-width: 1200px; }
+.logs-page { width: 100%; }
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .pagination-wrap { display: flex; justify-content: center; margin-top: 20px; }

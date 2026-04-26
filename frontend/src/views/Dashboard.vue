@@ -81,7 +81,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.dashboard { max-width: 1200px; }
+.dashboard { width: 100%; }
 .page-header { margin-bottom: 28px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }

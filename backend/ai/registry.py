@@ -3,6 +3,7 @@ from ai.openai_processor import OpenAIProcessor
 from ai.ollama_processor import OllamaProcessor
 from ai.glm_processor import GLMProcessor
 from ai.nvidia_processor import NvidiaProcessor
+from ai.local_whisper_processor import LocalWhisperProcessor
 from config import settings
 
 
@@ -34,3 +35,4 @@ ai_registry.register(OpenAIProcessor())
 ai_registry.register(OllamaProcessor())
 ai_registry.register(GLMProcessor())
 ai_registry.register(NvidiaProcessor())
+ai_registry.register(LocalWhisperProcessor())

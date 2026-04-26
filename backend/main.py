@@ -13,7 +13,7 @@ from loguru import logger
 from config import settings
 from database import init_db
 from scheduler.engine import crawler_scheduler
-from api import creators, videos, notifications, ai, logs, sys_settings as settings_api, auth, users
+from api import creators, videos, notifications, ai, logs, sys_settings as settings_api, auth, users, accounts
 
 
 async def init_admin_user():
@@ -63,6 +63,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "version": settings.app_version}
+
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -72,15 +78,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ─── 仪表盘统计接口 (直接挂载，双保险) ───
+@app.get("/api/logs/stats")
+async def get_dashboard_stats_direct():
+    from database import AsyncSessionLocal
+    from sqlalchemy import select, func
+    from db.models import Creator, Video, CrawlLog
+    from loguru import logger
+    try:
+        async with AsyncSessionLocal() as db:
+            creator_count = (await db.execute(select(func.count()).select_from(Creator))).scalar() or 0
+            video_count = (await db.execute(select(func.count()).select_from(Video))).scalar() or 0
+            downloaded_count = (await db.execute(select(func.count()).where(Video.downloaded == True))).scalar() or 0
+            log_count = (await db.execute(select(func.count()).select_from(CrawlLog))).scalar() or 0
+            
+            # 今日新增统计（UTC+8）
+            today_new = (await db.execute(
+                select(func.count())
+                .select_from(Video)
+                .where(func.date(Video.created_at, '+8 hours') >= func.date('now', 'localtime', 'start of day'))
+            )).scalar() or 0
+            
+            return {
+                "creator_count": creator_count,
+                "video_count": video_count,
+                "downloaded_count": downloaded_count,
+                "log_count": log_count,
+                "today_new": today_new,
+            }
+    except Exception as e:
+        logger.error(f"❌ 统计接口异常: {e}")
+        return {"creator_count": 0, "video_count": 0, "downloaded_count": 0, "log_count": 0, "today_new": 0}
+
+
 # API 路由
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(accounts.router)
 app.include_router(creators.router)
 app.include_router(videos.router)
 app.include_router(notifications.router)
 app.include_router(ai.router)
 app.include_router(logs.router)
 app.include_router(settings_api.router)
+
 
 # ── 托管前端静态文件 ──
 # 假设前端 build 后的文件放在 backend/static 目录下
@@ -94,40 +136,6 @@ if os.path.exists(static_dir):
         return FileResponse(os.path.join(static_dir, "index.html"))
 else:
     logger.warning(f"⚠️ 静态文件目录不存在: {static_dir}，前端页面将无法通过此端口访问")
-
-
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "version": settings.app_version}
-
-
-@app.get("/api/stats")
-async def stats():
-    """仪表盘概览数据"""
-    from database import AsyncSessionLocal
-    from sqlalchemy import select, func
-    from db.models import Creator, Video, CrawlLog
-
-    async with AsyncSessionLocal() as db:
-        creator_count = (await db.execute(select(func.count()).select_from(Creator))).scalar()
-        video_count = (await db.execute(select(func.count()).select_from(Video))).scalar()
-        downloaded_count = (await db.execute(
-            select(func.count()).where(Video.downloaded == True)
-        )).scalar()
-        log_count = (await db.execute(select(func.count()).select_from(CrawlLog))).scalar()
-        today_new = (await db.execute(
-            select(func.count()).where(
-                func.date(Video.created_at) == func.date("now")
-            )
-        )).scalar()
-
-    return {
-        "creator_count": creator_count,
-        "video_count": video_count,
-        "downloaded_count": downloaded_count,
-        "log_count": log_count,
-        "today_new": today_new,
-    }
 
 
 if __name__ == "__main__":

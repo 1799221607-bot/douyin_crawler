@@ -39,7 +39,7 @@ class VideoCollector(BaseCollector):
         proxy = config.get("proxy")
 
         logger.info(f"[VideoCollector] 开始通过 API 拉取博主视频: {sec_uid}")
-        raw_entries = await self._fetch_user_post_api(sec_uid, cookie, proxy)
+        raw_entries = await self._fetch_user_post_api(sec_uid, cookie, proxy, config)
         
         if not raw_entries:
             return []
@@ -82,7 +82,7 @@ class VideoCollector(BaseCollector):
 
         return None
 
-    async def _fetch_user_post_api(self, sec_uid: str, cookie: str, proxy: Optional[str]) -> list[dict]:
+    async def _fetch_user_post_api(self, sec_uid: str, cookie: str, proxy: Optional[str], config: dict) -> list[dict]:
         base_url = "https://www.douyin.com/aweme/v1/web/aweme/post/"
         
         # 提取或生成 msToken
@@ -126,7 +126,7 @@ class VideoCollector(BaseCollector):
             "msToken": ms_token,
             "sec_user_id": sec_uid,
             "max_cursor": 0,
-            "count": 35,
+            "count": 5 if config.get("fast_mode") else 35,
             "locate_query": "false",
             "show_live_replay_strategy": "1",
             "need_time_list": "1",
@@ -138,11 +138,14 @@ class VideoCollector(BaseCollector):
         
         query_str = urllib.parse.urlencode(params)
         
-        # 强制与生成 A-Bogus 的浏览器指纹匹配
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        # 优先使用账号绑定的 UA，否则使用默认指纹
+        user_agent = config.get("user_agent")
+        if not user_agent:
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        
         from utils.abogus import BrowserFingerprintGenerator
         browser_fp = BrowserFingerprintGenerator.generate_fingerprint("Chrome")
-        logger.info(f"[VideoCollector] 生成 Browser Fingerprint: {browser_fp}")
+        logger.info(f"[VideoCollector] 使用 User-Agent: {user_agent}")
         
         signer = ABogus(fp=browser_fp, user_agent=user_agent)
         params_with_ab, _ab, ua, _body = signer.generate_abogus(query_str, "")

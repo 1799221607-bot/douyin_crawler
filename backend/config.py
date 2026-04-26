@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # Download
     download_dir: str = "./videos"
     proxy: Optional[str] = None
+    collector_proxy_enabled: bool = False  # 默认采集抖音不走代理
     cookie: str = ""
 
     # OpenAI
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o"
     whisper_model: str = "whisper-1"
+    whisper_base_url: Optional[str] = None
 
     # Ollama (fallback)
     ollama_base_url: str = "http://localhost:11434"

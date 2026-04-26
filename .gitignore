@@ -1,6 +1,10 @@
-# 忽略 Python 虚拟环境
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 backend/venv/
-backend/__pycache__/
 backend/*.db
 backend/downloads/
 backend/videos/
@@ -8,10 +12,15 @@ backend/videos/
 **/.env
 backend/.env
 
-# 忽略前端依赖和打包文件
+# Node
+node_modules/
 frontend/node_modules/
 frontend/dist/
+.el-table__column-resize-proxy
 
-# 忽略系统文件
+# System
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -27,6 +27,7 @@
         </div>
         <div class="channel-actions">
           <el-button size="small" @click="testSend(nc)">测试发送</el-button>
+          <el-button size="small" type="primary" text @click="openEditDialog(nc)">编辑</el-button>
           <el-button size="small" type="danger" text @click="deleteConfig(nc)">删除</el-button>
         </div>
       </div>
@@ -37,8 +38,8 @@
       </div>
     </div>
 
-    <!-- 添加渠道对话框 -->
-    <el-dialog v-model="showDialog" title="添加通知渠道" width="520px">
+    <!-- 添加/编辑渠道对话框 -->
+    <el-dialog v-model="showDialog" :title="isEdit ? '编辑通知渠道' : '添加通知渠道'" width="520px">
       <el-form :model="form" label-width="120px">
         <el-form-item label="渠道类型">
           <el-select v-model="form.channel" @change="onChannelChange" placeholder="选择渠道">
@@ -56,9 +57,10 @@
         </el-form-item>
         <el-form-item label="订阅事件">
           <el-checkbox-group v-model="form.events">
-            <el-checkbox label="new_video">新视频</el-checkbox>
-            <el-checkbox label="crawl_error">采集出错</el-checkbox>
-            <el-checkbox label="ai_summary_done">AI总结完成</el-checkbox>
+            <el-checkbox label="new_video">新视频采集</el-checkbox>
+            <el-checkbox label="crawl_error">采集过程出错</el-checkbox>
+            <el-checkbox label="ai_summary_done">AI 总结完成</el-checkbox>
+            <el-checkbox label="account_expired">账号池异常(过期)</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
         <!-- 动态渲染渠道字段 -->
@@ -73,7 +75,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleAdd">保存</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -89,6 +91,8 @@ const configs = ref([])
 const channelSchemas = ref({})
 const showDialog = ref(false)
 const submitting = ref(false)
+const isEdit = ref(false)
+const currentId = ref(null)
 const form = ref({ channel: '', name: '', events: ['new_video'], config_json: {} })
 
 const currentFields = computed(() => channelSchemas.value[form.value.channel]?.fields || [])
@@ -101,7 +105,10 @@ const channelStyle = (ch) => ({
 }[ch] || { icon: '🔔', label: ch, bg: 'linear-gradient(135deg,#6366f1,#8b5cf6)' })
 
 const eventLabel = (ev) => ({
-  new_video: '新视频', crawl_error: '采集出错', ai_summary_done: 'AI完成'
+  new_video: '新视频采集', 
+  crawl_error: '采集出错', 
+  ai_summary_done: 'AI完成',
+  account_expired: '账号异常'
 }[ev] || ev)
 
 const loadData = async () => {
@@ -114,17 +121,36 @@ const loadData = async () => {
 }
 
 const openAddDialog = () => {
+  isEdit.value = false
+  currentId.value = null
   form.value = { channel: '', name: '', events: ['new_video'], config_json: {} }
+  showDialog.value = true
+}
+
+const openEditDialog = (nc) => {
+  isEdit.value = true
+  currentId.value = nc.id
+  form.value = { 
+    channel: nc.channel, 
+    name: nc.name, 
+    events: [...nc.events], 
+    config_json: typeof nc.config_json === 'string' ? JSON.parse(nc.config_json) : { ...nc.config_json }
+  }
   showDialog.value = true
 }
 
 const onChannelChange = () => { form.value.config_json = {} }
 
-const handleAdd = async () => {
+const handleSave = async () => {
   submitting.value = true
   try {
-    await notificationApi.create(form.value)
-    ElMessage.success('添加成功')
+    if (isEdit.value) {
+      await notificationApi.update(currentId.value, form.value)
+      ElMessage.success('更新成功')
+    } else {
+      await notificationApi.create(form.value)
+      ElMessage.success('添加成功')
+    }
     showDialog.value = false
     await loadData()
   } finally {
@@ -153,7 +179,7 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.notifications-page { max-width: 1100px; }
+.notifications-page { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }

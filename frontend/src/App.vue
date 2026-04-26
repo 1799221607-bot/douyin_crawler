@@ -81,6 +81,7 @@ const navItems = [
   { path: '/queue', label: '采集队列', icon: 'Timer' },
   { path: '/notifications', label: '通知配置', icon: 'Bell' },
   { path: '/logs', label: '采集日志', icon: 'Document' },
+  { path: '/accounts', label: '账号池', icon: 'Key' },
   { path: '/settings', label: '系统设置', icon: 'Setting' },
 ]
 

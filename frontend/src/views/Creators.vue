@@ -25,6 +25,8 @@
               <el-tag :type="c.enabled ? 'success' : 'info'" size="small">
                 {{ c.enabled ? '采集中' : '已暂停' }}
               </el-tag>
+              <el-tag v-if="c.priority === 2" type="danger" size="small" effect="dark">高优先级</el-tag>
+              <el-tag v-if="c.is_fast_mode" type="warning" size="small" effect="plain">抢拍开启</el-tag>
               <span class="interval-text">每 {{ c.interval_min }} 分钟</span>
             </div>
           </div>
@@ -90,6 +92,17 @@
           <el-input-number v-model="addForm.interval_min" :min="5" :max="1440" />
           <span style="margin-left:8px;color:var(--text-secondary)">分钟</span>
         </el-form-item>
+        <el-form-item label="采集优先级">
+          <el-select v-model="addForm.priority">
+            <el-option label="低" :value="0" />
+            <el-option label="中" :value="1" />
+            <el-option label="高" :value="2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="秒删抢拍">
+          <el-switch v-model="addForm.is_fast_mode" />
+          <span style="margin-left:8px;font-size:12px;color:var(--text-secondary)">探测频率更高且不请求冗余数据</span>
+        </el-form-item>
         <el-form-item label="下载视频">
           <el-switch v-model="addForm.download_video" />
         </el-form-item>
@@ -115,6 +128,16 @@
         <el-form-item label="采集间隔">
           <el-input-number v-model="editForm.interval_min" :min="5" :max="1440" />
           <span style="margin-left:8px;color:var(--text-secondary)">分钟</span>
+        </el-form-item>
+        <el-form-item label="采集优先级">
+          <el-select v-model="editForm.priority">
+            <el-option label="低" :value="0" />
+            <el-option label="中" :value="1" />
+            <el-option label="高" :value="2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="秒删抢拍">
+          <el-switch v-model="editForm.is_fast_mode" />
         </el-form-item>
         <el-form-item label="下载视频">
           <el-switch v-model="editForm.download_video" />
@@ -144,11 +167,11 @@ const submitting = ref(false)
 const editingCreator = ref(null)
 
 const addForm = ref({
-  name: '', user_url: '', interval_min: 60, download_video: true, enabled: true
+  name: '', user_url: '', interval_min: 60, download_video: true, enabled: true, priority: 1, is_fast_mode: false
 })
 
 const editForm = ref({
-  name: '', user_url: '', interval_min: 60, download_video: true
+  name: '', user_url: '', interval_min: 60, download_video: true, priority: 1, is_fast_mode: false
 })
 
 const formatTime = (iso) => iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—'
@@ -201,7 +224,9 @@ const handleCommand = async (cmd, creator) => {
       name: creator.name,
       user_url: creator.user_url,
       interval_min: creator.interval_min,
-      download_video: creator.download_video
+      download_video: creator.download_video,
+      priority: creator.priority,
+      is_fast_mode: creator.is_fast_mode
     }
     showEditDialog.value = true
   } else if (cmd === 'videos') {
@@ -230,7 +255,7 @@ onMounted(loadCreators)
 </script>
 
 <style scoped>
-.creators-page { max-width: 1200px; }
+.creators-page { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }

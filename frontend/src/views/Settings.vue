@@ -2,71 +2,68 @@
   <div class="settings-page">
     <div class="page-header">
       <h1>⚙️ 系统设置</h1>
-      <p class="subtitle">管理平台的全局配置，如 Cookie、代理等</p>
+      <p class="subtitle">管理平台的全局环境参数与系统信息</p>
     </div>
 
     <div class="settings-container">
       <el-card class="settings-card">
         <template #header>
           <div class="card-header">
-            <span>🌐 抖音配置</span>
-            <el-button type="primary" size="small" @click="saveCookie" :loading="saving">保存配置</el-button>
+            <span>💻 运行环境</span>
           </div>
         </template>
-        
-        <el-form label-position="top">
-          <el-form-item label="抖音 Cookie (dy_cookie)">
-            <el-input
-              v-model="cookie"
-              type="textarea"
-              :rows="6"
-              placeholder="请粘贴从浏览器获取的完整 Cookie..."
-            />
-            <div class="input-tip">
-              用于 API 鉴权的敏感信息。更新后下次采集任务将自动生效，无需重启后端。
-            </div>
-          </el-form-item>
-        </el-form>
+        <div class="info-list">
+          <div class="info-item">
+            <span class="label">平台版本</span>
+            <span class="value">v1.2.0 (Account Pool Ready)</span>
+          </div>
+          <div class="info-item">
+            <span class="label">前端框架</span>
+            <span class="value">Vue 3.x + Element Plus</span>
+          </div>
+          <div class="info-item">
+            <span class="label">后端引擎</span>
+            <span class="value">FastAPI + SQLAlchemy</span>
+          </div>
+          <div class="info-item">
+            <span class="label">采集驱动</span>
+            <span class="value">Python ABogus + httpx</span>
+          </div>
+          <div class="info-item">
+            <span class="label">数据库状态</span>
+            <span class="value success">Connected (SQLite)</span>
+          </div>
+        </div>
       </el-card>
 
       <el-card class="settings-card mt-20">
         <template #header>
           <div class="card-header">
-            <span>🤖 自动化工具：浏览器自动获取 Cookie</span>
+            <span>💾 存储管理</span>
           </div>
         </template>
-        <div class="tool-section">
-          <p class="tool-desc">
-            点击下方按钮将启动一个临时的浏览器窗口。您只需在弹出的窗口中登录抖音，系统将自动捕获登录状态（含 HttpOnly Cookie）并完成同步。
-          </p>
-          <div class="bookmarklet-wrap">
-            <el-button type="success" :loading="fetching" @click="handleAutoFetch">
-              🚀 启动自动获取窗口
-            </el-button>
+        <div class="setting-item-inline">
+          <div class="item-info">
+            <span class="label">自动清理过期视频</span>
+            <span class="desc">超出保留天数的视频及其记录将被永久删除（0 表示不清理）</span>
           </div>
-          <el-alert title="注意事项" type="warning" :closable="false" show-icon style="margin-top:12px">
-            1. 需要在后端环境中安装 DrissionPage：<b>pip install DrissionPage</b><br/>
-            2. 点击后请留意桌面是否弹出了新的 Chrome/Edge 窗口。<br/>
-            3. 在弹出窗口中完成登录后，请稍等片刻，窗口会自动关闭并同步数据。
-          </el-alert>
+          <div class="item-action">
+            <el-input-number v-model="retentionDays" :min="0" :max="365" size="small" />
+            <span class="unit">天</span>
+            <el-button type="primary" size="small" @click="saveRetention" :loading="saving">保存</el-button>
+          </div>
         </div>
       </el-card>
 
       <el-card class="settings-card mt-20">
-        <div class="info-list">
-          <div class="info-item">
-            <span class="label">平台版本</span>
-            <span class="value">v1.1.0</span>
+        <template #header>
+          <div class="card-header">
+            <span>🛡️ 系统安全</span>
           </div>
-          <div class="info-item">
-            <span class="label">运行模式</span>
-            <span class="value">Production</span>
-          </div>
-          <div class="info-item">
-            <span class="label">数据库状态</span>
-            <span class="value success">Connected</span>
-          </div>
-        </div>
+        </template>
+        <p class="tool-desc">
+          所有 Cookie 数据均经过 AES 加密存储于本地数据库。请妥善保管您的 JWT 密钥和管理员账号。
+        </p>
       </el-card>
     </div>
   </div>
@@ -77,47 +74,26 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { settingApi } from '@/api'
 
-const cookie = ref('')
+const retentionDays = ref(0)
 const saving = ref(false)
-const fetching = ref(false)
 
 const loadSettings = async () => {
   try {
-    const res = await settingApi.get('dy_cookie')
-    cookie.value = res.value || ''
+    const res = await settingApi.get('video_retention_days')
+    retentionDays.value = parseInt(res.value) || 0
   } catch (err) {
-    console.error('加载设置失败:', err)
+    console.error('加载设置失败', err)
   }
 }
 
-const handleAutoFetch = async () => {
-  fetching.value = true
-  ElMessage.info('正在启动自动化窗口，请留意您的任务栏...')
-  try {
-    const res = await settingApi.autoFetch()
-    cookie.value = res.cookie
-    ElMessage.success('自动同步成功！')
-  } catch (err) {
-    ElMessage.error(err.response?.data?.detail || '自动化获取失败，请检查后端是否安装了 DrissionPage')
-  } finally {
-    fetching.value = false
-  }
-}
-
-const saveCookie = async () => {
-  if (!cookie.value) {
-    return ElMessage.warning('请输入 Cookie 内容')
-  }
-  
+const saveRetention = async () => {
   saving.value = true
   try {
-    await settingApi.set('dy_cookie', {
-      value: cookie.value,
-      description: '抖音 Web 端 API 采集 Cookie'
+    await settingApi.set('video_retention_days', { 
+      value: String(retentionDays.value),
+      description: '视频自动保留天数策略'
     })
-    ElMessage.success('配置已保存，下次采集任务将生效')
-  } catch (err) {
-    ElMessage.error('保存失败')
+    ElMessage.success('存储策略已更新')
   } finally {
     saving.value = false
   }
@@ -127,36 +103,29 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.settings-page { max-width: 800px; }
+.settings-page { width: 100%; }
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
 
 .settings-card { border-radius: var(--radius); }
 .card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
-.input-tip { font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.5; }
 
 .mt-20 { margin-top: 20px; }
 
-.tool-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; }
-.bookmarklet-wrap { display: flex; justify-content: center; padding: 10px 0; }
-.bookmark-btn {
-  background: var(--el-color-primary);
-  color: white;
-  padding: 10px 24px;
-  border-radius: 20px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: grab;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
-  transition: all 0.3s;
-}
-.bookmark-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(64, 158, 255, 0.4); }
+.tool-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
 
-.info-list { display: flex; flex-direction: column; gap: 12px; }
-.info-item { display: flex; justify-content: space-between; font-size: 14px; }
+.info-list { display: flex; flex-direction: column; gap: 16px; }
+.info-item { display: flex; justify-content: space-between; font-size: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.info-item:last-child { border-bottom: none; }
 .info-item .label { color: var(--text-secondary); }
 .info-item .value { font-weight: 500; }
 .info-item .value.success { color: var(--el-color-success); }
+
+.setting-item-inline { display: flex; justify-content: space-between; align-items: center; }
+.item-info { display: flex; flex-direction: column; gap: 4px; }
+.item-info .label { font-size: 14px; font-weight: 500; }
+.item-info .desc { font-size: 12px; color: var(--text-secondary); }
+.item-action { display: flex; align-items: center; gap: 8px; }
+.unit { font-size: 13px; color: var(--text-secondary); }
 </style>

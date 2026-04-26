@@ -20,6 +20,8 @@ class Creator(Base):
     interval_min: Mapped[int] = mapped_column(Integer, default=60, comment="采集间隔（分钟）")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     download_video: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否下载视频文件")
+    priority: Mapped[int] = mapped_column(Integer, default=1, comment="采集优先级 (0:低, 1:中, 2:高)")
+    is_fast_mode: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否开启秒删抢拍模式")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
@@ -135,3 +137,20 @@ class LoginLog(Base):
     status: Mapped[str] = mapped_column(String(20), comment="success | failed")
     error_msg: Mapped[Optional[str]] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class PlatformAccount(Base):
+    """多平台采集账号池"""
+    __tablename__ = "platform_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(50), nullable=False, comment="douyin | xhs")
+    username: Mapped[str] = mapped_column(String(100), nullable=False, comment="账号备注名")
+    cookie: Mapped[str] = mapped_column(Text, nullable=False)
+    proxy_url: Mapped[Optional[str]] = mapped_column(String(500), comment="绑定的固定代理")
+    ua: Mapped[Optional[str]] = mapped_column(String(500), comment="绑定的 User-Agent")
+    status: Mapped[str] = mapped_column(String(50), default="active", comment="active|expired|banned")
+    fail_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, comment="用于轮询调度")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())

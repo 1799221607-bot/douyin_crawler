@@ -58,6 +58,12 @@ const routes = [
     name: 'Users',
     component: () => import('@/views/Users.vue'),
     meta: { title: '用户管理', admin: true }
+  },
+  {
+    path: '/accounts',
+    name: 'Accounts',
+    component: () => import('@/views/Accounts.vue'),
+    meta: { title: '账号池管理' }
   }
 ]
 
