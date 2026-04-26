@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: douyin_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: douyin_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./videos:/app/videos          # 视频存储（持久化）
+      - ./douyin_crawler.db:/app/douyin_crawler.db  # SQLite 数据库
+      - ./.env:/app/.env              # 环境变量
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: douyin_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  redis_data:

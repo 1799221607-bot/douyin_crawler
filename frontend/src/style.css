@@ -1,0 +1,80 @@
+/* 全局样式 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary: #fe2c55;
+  --primary-dark: #d41f45;
+  --bg-dark: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-hover: #1a1a28;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-primary: #f0f0f0;
+  --text-secondary: rgba(240,240,240,0.5);
+  --success: #00c566;
+  --warning: #ffb800;
+  --danger: #ff4d4f;
+  --radius: 12px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+/* Element Plus 暗色主题覆盖 */
+.el-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.el-dialog {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+}
+
+.el-dialog__title { color: var(--text-primary) !important; }
+.el-dialog__body { color: var(--text-primary) !important; }
+
+.el-input__wrapper { background: #1e1e2e !important; border-color: var(--border) !important; }
+.el-input__inner { color: var(--text-primary) !important; }
+.el-select .el-input__wrapper { background: #1e1e2e !important; }
+
+.el-table { background: transparent !important; }
+.el-table__header-wrapper th { background: #1a1a28 !important; color: var(--text-secondary) !important; }
+.el-table__row { background: transparent !important; }
+.el-table__row:hover > td { background: var(--bg-hover) !important; }
+.el-table td { border-bottom-color: var(--border) !important; }
+
+.el-button--primary {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.el-button--primary:hover {
+  background: var(--primary-dark) !important;
+}
+
+.el-tag--success { background: rgba(0,197,102,0.15) !important; color: var(--success) !important; }
+.el-tag--danger { background: rgba(255,77,79,0.15) !important; color: var(--danger) !important; }
+.el-tag--warning { background: rgba(255,184,0,0.15) !important; color: var(--warning) !important; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+/* 卡片悬停动画 */
+.hover-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+}
