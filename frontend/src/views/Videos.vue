@@ -20,7 +20,7 @@
     
     <!-- 筛选栏 -->
     <div class="filter-bar">
-      <el-select v-model="filterCreatorId" placeholder="按博主筛选" clearable @change="onSearch" style="width: 200px">
+      <el-select v-if="isCreatorsLoaded" v-model="filterCreatorId" placeholder="按博主筛选" clearable @change="onSearch" style="width: 200px">
         <el-option v-for="c in creatorOptions" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <el-input
@@ -192,7 +192,9 @@
             <div class="ai-box-header">
               <span class="ai-box-title">🤖 AI 核心总结</span>
               <el-button size="small" type="primary" text :icon="Refresh" 
-                @click="triggerAI(currentVideo.aweme_id)">更新</el-button>
+                @click="triggerAI(currentVideo.aweme_id)">
+                {{ currentVideo.ai_summary ? '更新' : 'AI 总结' }}
+              </el-button>
             </div>
             
             <div v-if="currentVideo.ai_summary" class="ai-box-content">
@@ -229,6 +231,7 @@ const searchKeyword = ref('')
 const filterCreatorId = ref(null)
 const activeTab = ref('today') // 默认显示今日
 const creatorOptions = ref([])
+const isCreatorsLoaded = ref(false) // 增加状态锁
 const showPlayer = ref(false)
 const currentVideo = ref(null)
 const videoEl = ref(null)
@@ -279,13 +282,41 @@ const historyVideos = computed(() => {
   })
 })
 
+const creatorFilterKey = ref(0)
 const formatDuration = (s) => {
   const mins = Math.floor(s / 60)
   const secs = Math.floor(s % 60)
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 const formatNum = (n) => n >= 10000 ? `${(n/10000).toFixed(1)}w` : (n ?? '—')
-const formatDate = (iso) => iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—'
+const formatDate = (val) => {
+  if (!val) return '—'
+  let date;
+  if (!isNaN(val) && !isNaN(parseFloat(val))) {
+    date = new Date(parseFloat(val) * 1000)
+  } else {
+    // 强制处理 ISO 字符串
+    date = new Date(val.endsWith('Z') || val.includes('+') ? val : val + 'Z')
+  }
+  
+  if (isNaN(date.getTime())) return val
+  
+  const now = new Date()
+  // 【终极纠偏】
+  // 如果时间比现在快 3 小时以上（针对 05:04 vs 18:44 这种 11 小时偏移或 8 小时偏移）
+  if (date.getTime() > now.getTime() + 3 * 3600 * 1000) {
+    console.log('[TimeFix] 检测到未来时间, 自动回拨 8 小时:', date.toLocaleString())
+    date.setHours(date.getHours() - 8)
+    
+    // 如果回拨完还是未来时间（说明是双重叠加），再回拨一次 8 小时或根据差值调整
+    if (date.getTime() > now.getTime() + 1 * 3600 * 1000) {
+       console.log('[TimeFix] 仍处于未来, 再次回拨 8 小时')
+       date.setHours(date.getHours() - 8)
+    }
+  }
+  
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
 const parseKeywords = (kw) => {
   try { return typeof kw === 'string' ? JSON.parse(kw) : kw } catch { return [] }
 }
@@ -313,18 +344,53 @@ const loadCreators = async () => {
   try {
     const res = await creatorApi.list()
     creatorOptions.value = res.data || []
+    isCreatorsLoaded.value = true // 标记加载完成
   } catch {}
 }
 
-const initPage = () => {
+const initPage = async () => {
+  console.log('[Videos] 初始化页面, Query:', route.query)
+  await loadCreators()
+  
+  // 1. 确定目标博主 ID (优先级：URL > 缓存 > 列表第一个)
+  let targetId = null
+  
   if (route.query.creator_id) {
-    filterCreatorId.value = parseInt(route.query.creator_id)
+    targetId = Number(route.query.creator_id)
+  } else {
+    const cachedId = localStorage.getItem('last_view_creator_id')
+    if (cachedId) {
+      targetId = Number(cachedId)
+    } else if (creatorOptions.value.length > 0) {
+      // 兜底：自动选中第一个博主
+      targetId = creatorOptions.value[0].id
+      console.log('[Videos] 无预设, 自动选中第一个博主:', targetId)
+    }
   }
-  loadCreators()
+
+  // 2. 执行回显
+  if (targetId !== null) {
+    filterCreatorId.value = targetId
+    // 强制存储
+    localStorage.setItem('last_view_creator_id', targetId)
+    
+    // 3. 延时二次同步，对抗 el-select 的异步加载
+    setTimeout(() => {
+      filterCreatorId.value = targetId
+      console.log('[Videos] 最终回显确认:', filterCreatorId.value)
+    }, 50)
+  }
+  
   loadVideos()
 }
 
-const onSearch = () => { page.value = 1; loadVideos() }
+const onSearch = () => { 
+  if (filterCreatorId.value) {
+    localStorage.setItem('last_view_creator_id', filterCreatorId.value)
+  }
+  page.value = 1; 
+  loadVideos() 
+}
 
 const onTabChange = () => {
   page.value = 1
@@ -362,6 +428,13 @@ const triggerAI = async (awemeId) => {
 
 onMounted(initPage)
 watch(() => route.query, initPage)
+// 增加深度监听，一旦选项加载完成且 query 中有 ID，强制同步一次
+watch(creatorOptions, (newVal) => {
+  if (newVal.length > 0 && route.query.creator_id) {
+    filterCreatorId.value = Number(route.query.creator_id)
+    creatorFilterKey.value++
+  }
+}, { deep: true })
 </script>
 
 <style scoped>

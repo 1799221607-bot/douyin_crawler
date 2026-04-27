@@ -198,12 +198,9 @@ class VideoCollector(BaseCollector):
         desc = entry.get("desc", "")
         create_time = entry.get("create_time", 0)
         
-        published_at = None
         if create_time:
-            # 转换为北京时间 (UTC+8) 的无时区格式
-            dt_utc = datetime.fromtimestamp(create_time, timezone.utc)
-            dt_bj = dt_utc + timedelta(hours=8)
-            published_at = dt_bj.replace(tzinfo=None).isoformat()
+            # 统一使用 UTC 时间
+            published_at = datetime.fromtimestamp(create_time, timezone.utc).isoformat()
         
         video = entry.get("video", {})
         duration = video.get("duration", 0) / 1000.0  # ms 转 s
@@ -231,11 +228,8 @@ class VideoCollector(BaseCollector):
             "duration": duration,
             "cover_url": cover_url,
             "play_url": play_url or f"https://www.douyin.com/video/{aweme_id}",
-            "like_count": statistics.get("digg_count", 0),
-            "comment_count": statistics.get("comment_count", 0),
-            "share_count": statistics.get("share_count", 0),
             "collect_count": statistics.get("collect_count", 0),
-            "published_at": published_at,
+            "published_at": create_time,
         }
 
     async def download_video(self, aweme_id: str, play_url: str, creator_name: str, config: dict) -> Optional[str]:
